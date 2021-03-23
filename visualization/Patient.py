@@ -21,6 +21,7 @@ class Patient(object):
     def __init__(self, 
                  foldername, 
                  patient_ID,
+                 patch_size_mm,
                  patch_size_px):
         '''
         Initialize a WholeSlide class
@@ -41,14 +42,16 @@ class Patient(object):
         '''
         assert os.path.isdir(foldername), "Folder does not exist"
         self.foldername = foldername
-        self.patient_ID = patient_ID,
+        self.patient_ID = patient_ID
         self.patch_size_px = patch_size_px 
+        self.patch_size_mm = patch_size_mm
         self.AbsoluteReferences = None
         
         # Initializing by reading the folder
         self.PatchesFileNames = self.read_folder() #List of patches that are contained
         self.PatchesDict_unorganized = self.generate_patches_dict(self.PatchesFileNames) # Dictionary that consists of patches and their locations
         self.PatchesDict = self.organize_patches_dict(self.PatchesDict_unorganized)
+        self.register_patches_segment(self.PatchesDict)
 
     def read_folder(self):
         '''
@@ -84,11 +87,6 @@ class Patient(object):
         p = file_name.split(sep = "_")
         if len(p) != 5:
             return False
-        patient, _, xx, yy, _ =  p[0], p[1], p[2], p[3], p[4], p[5]
-        if not patient.isalnum():
-            return False
-        if not (yy.isnumeric() and xx.isnumeric()):
-            return False
         return True
     
     def get_info(self, fname):
@@ -104,7 +102,10 @@ class Patient(object):
         f = fname.split(sep = ".")
         file_name = f[0]
         p = file_name.split(sep = "_")
-        _, _, xx, yy, patch_class =  p[0], p[1], p[2], p[3], p[4], p[5]
+        _, _, xx, yy, patch_class =  p[0], p[1], p[2], p[3], p[4]
+        xx = int(xx[1:])
+        yy = int(yy[1:])
+        patch_class = patch_class[-1]
         return yy, xx, patch_class      
     
     def generate_patches_dict(self, files):
@@ -144,31 +145,50 @@ class Patient(object):
     def mm_to_px_coordinates(self, coordinates):
         # Simply convert a mm coordinates to px coordinates
         # First "normalize" the mm coordinates to the absolute reference image
-        out = tuple(map(lambda a,b,c: int(a-b)*c, coordinates, self.AbsoluteReferences["Coor_mm"], self.patch_size_px))
+        normalized = tuple(map(lambda a,b,c: int((a-b)/c), coordinates, self.AbsoluteReferences["Coor_mm"], self.patch_size_mm))
+        out = (normalized[0] * self.patch_size_px[0], normalized[1] * self.patch_size_px[1])
         return out
     
-    def generate_wholeslide_image(self):
-        # Generate a large image consist of all patches together
+    def generate_wholeslide_image(self, class_vis = False):
+        '''
+        Generate a large image consist of all patches together
+        Input:
+            class_vis: Boolean
+            If set to True, 1 class will become red and 0 class will become blue
+        '''
         
         # Get the top, bottom, leftmost, and rightmost pixels
-        top_px = min(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][0])[0]
-        bottom_px = max(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][0])[0]
+        top_px = min(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][0])["Coor_px"][0]
+        bottom_px = max(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][0])["Coor_px"][0]
         bottom_px += self.patch_size_px[0]
         
-        leftmost_px = min(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][1])[1]
-        rightmost_px = max(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][1])[1]
+        leftmost_px = min(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][1])["Coor_px"][1]
+        rightmost_px = max(self.PatchesDict_unorganized, key = lambda f: f["Coor_px"][1])["Coor_px"][1]
         rightmost_px += self.patch_size_px[1]
         
         # Create the large image where everything goes 
         H = bottom_px - top_px
         W = rightmost_px - leftmost_px
         hh, ww, D = self.patch_size_px
-    
+        
+        print("Top: {0}, Bottom {1}, Leftmost {2}, RightMost {3}".format(top_px, bottom_px, leftmost_px, rightmost_px))
+        
         # Put our image patches into the large matrix
         out = np.zeros((H, W, D))
-        for I in self.PatchesDict_unorganized:
-            M = cv2.imread(I["Patch Name"])
-            yy, xx = I["Coor_px"]
-            out[yy - top_px: yy - top_px + hh, xx - leftmost_px: xx - leftmost_px + ww, :] = M[:,:,:]
+        for r in self.PatchesDict:
+            for I in r:
+                M = cv2.imread(self.foldername + "/" + self.patient_ID + "/" + I["Class"] + "/" + I["Patch Name"])
+                if M.shape != self.patch_size_px: continue
+                yy, xx = I["Coor_px"]
+                
+                if class_vis:
+                    if I["Class"] == "0":
+                        M[:,:,0] = M[:,:,0] * 0.8 + 0.2
+                    if I["Class"] == "1":
+                        M[:,:,2] = M[:,:,2] * 0.8 + 0.2
+                
+                #print("xx = " + str(xx))
+                #print("xx_pos = " + str(xx - leftmost_px + ww))
+                out[yy - top_px: yy - top_px + hh, xx - leftmost_px: xx - leftmost_px + ww, :] = M[:,:,:]
         return(out)    
             
