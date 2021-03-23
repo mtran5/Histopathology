@@ -28,7 +28,7 @@ if __name__ == "__main__":
     test_patients = patients[int(len(patients) * train_test_split):]
     
     # Generate a small dataset of train data for better prototyping
-    train_patients = train_patients[:15]
+    train_patients = train_patients[:20]
     
     X_train, y_train = GetDataset.get_dataset(foldername, train_patients)
     X_test, y_test  = GetDataset.get_dataset(foldername, test_patients)
@@ -36,5 +36,6 @@ if __name__ == "__main__":
     # Get the class distribution from the small dataset
     print("Positive classes percentage in train data {:2.2%}.".format(sum(y_train)/len(y_train)))
     
-    # Using Tensorflow to produce a model
+    # Using shutil to copy and paste these files into a new dataset
+    
     
