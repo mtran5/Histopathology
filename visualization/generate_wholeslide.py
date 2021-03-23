@@ -11,7 +11,7 @@ if __name__ == "__main__":
     # Enter the file path to the patient here
     foldername = "../../histopathology_dataset/"
     # Enter the patients number here
-    patient_id = "16550"
+    patient_id = "8863"
     
     patch_size_px = (50, 50, 3)
     patch_size_mm = (50, 50)
